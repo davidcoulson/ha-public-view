@@ -24,6 +24,30 @@ including custom cards and history charts, but cannot press, save or run anythin
 - The add-on signs in to Home Assistant as its own user, **Public Access viewer**, which belongs to the read-only
   group and cannot log in from outside your network. Do not delete or edit this user.
 
+## Monitor and control it from Home Assistant
+
+The add-on can show up in Home Assistant as a device called **Public Access** (it speaks the ESPHome protocol, so
+no extra integration is needed). In the panel, choose **Add to Home Assistant**. The connection is encrypted with a
+key the add-on generates and keeps in `/data`.
+
+| Entity | What it is |
+| --- | --- |
+| Status, Home Assistant link | Whether it is serving, paused, or waiting for Home Assistant |
+| Visitors, Visits, Visitors on *host* | Live connections, total visits, and live connections per address |
+| Refused requests, Rate limited | Counters; a sudden rise means someone is probing |
+| Published entities | How many entities visitors can read across all addresses |
+| Serve visitors (switch) | Off pauses everything: visitors are disconnected and pages answer 503 |
+| Publish *host* (switch) | Hides one address (404) without deleting it |
+| Most visitors, Most connections per visitor | Limits, changed live; saved and kept across restarts |
+| Log level | Changes the add-on log level live |
+| Disconnect all visitors, Reload published view | Buttons |
+
+Use these in automations: pause public access when the alarm is armed, or notify when Refused requests jumps.
+Adding or removing an address in the panel restarts the device for a few seconds; Home Assistant reconnects and
+keeps the history of the entities that remain. Turn the device off with the *Show as a Home Assistant device* option.
+
+Values you set from Home Assistant are saved and win over the add-on options until you change them there again.
+
 ## Views that cannot be published
 
 - A view needs a URL: open the view's settings and fill in *URL*.
@@ -44,6 +68,7 @@ first two in the add-on configuration.
 | Log level | `debug` shows every refused request. |
 | Most visitors at once | Live visitor connections in total. |
 | Most connections per visitor | Live connections from one address. |
+| Show as a Home Assistant device | Adds the Public Access device described above. On by default. |
 | Publications | Used only to seed a fresh install. Use the panel afterwards. |
 
 ## Troubleshooting
@@ -52,5 +77,6 @@ first two in the add-on configuration.
 | --- | --- |
 | The page shows nothing or "Upstream error" | Open the add-on log. The most common cause is a wrong *Home Assistant address* (HTTPS enabled in Core). |
 | Visitors see no entities | The view may use a strategy, or the URL of the view changed. Check the panel's preview. |
-| 429 or 503 | A limit was reached; wait a minute or raise the limits. |
+| 429 or 503 | A limit was reached (wait a minute or raise the limits), or **Serve visitors** is off in Home Assistant. |
+| Adding the device in Home Assistant says it cannot connect | Home Assistant must be able to reach this add-on by its host name (shown on the Info tab) on port 6053. Check the add-on log for ESPHome messages. |
 | Every visitor seems to be the same address | The add-on only trusts forwarded addresses from the internal network. Connect Cloudflared to it over the add-on network, not through a published host port. |

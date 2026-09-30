@@ -46,7 +46,9 @@ jobs:
       PA_ADMIN_PASS: admin-dev-password
       PA_OPTIONS_FILE: ${{ github.workspace }}/public-access/dev/options.json
       DATA_DIR: ${{ runner.temp }}/pa-data
-      UI_PORT: '0'
+      UI_PORT: '8100'
+      PA_UI_ALLOW_ANY: '1'
+      PA_ADDON_HOST: localhost
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -57,7 +59,7 @@ jobs:
       - run: npm ci
       - name: Start Home Assistant
         run: |
-          docker run -d --name ha -p 8123:8123 -v "$PWD/dev/ha-config:/config" ghcr.io/home-assistant/home-assistant:stable
+          docker run -d --name ha --network host -v "$PWD/dev/ha-config:/config" ghcr.io/home-assistant/home-assistant:stable
           for i in $(seq 1 120); do curl -sf http://localhost:8123/manifest.json >/dev/null && break; sleep 3; done
           curl -sf http://localhost:8123/manifest.json >/dev/null
       - name: Seed the test dashboard
@@ -68,6 +70,11 @@ jobs:
           for i in $(seq 1 60); do curl -sf http://localhost:8099/healthz >/dev/null && break; sleep 2; done
           curl -sf http://localhost:8099/healthz >/dev/null
       - run: node test/e2e/run.ts
+      - name: Add the ESPHome device to Home Assistant
+        run: |
+          curl -sf -X POST http://localhost:8100/api/esphome/adopt
+          sleep 10
+      - run: node test/e2e/esphome.ts
       - run: npx playwright-core install --with-deps chromium
       - run: node test/e2e/browser.ts
       - name: Show logs on failure

@@ -8,6 +8,8 @@ import { log } from '../log.ts';
 import { PublishedProvider } from '../policy/published.ts';
 import { PublicationStore, ValidationError, validatePublications } from '../publications.ts';
 import { stats } from '../relay/session.ts';
+import { adoptIntoHomeAssistant } from '../esphome/adopt.ts';
+import type { EsphomeHandle } from '../esphome/host.ts';
 
 const html = readFileSync(fileURLToPath(new URL('./index.html', import.meta.url)), 'utf8');
 
@@ -64,7 +66,7 @@ async function readJson(req: http.IncomingMessage): Promise<unknown> {
  * The setup page, served through Home Assistant's ingress. Only the Supervisor may talk to it: ingress
  * has already checked that the user is logged in to Home Assistant as an administrator.
  */
-export function createUiServer(config: Config, viewer: Viewer, store: PublicationStore, _providerFor: (p: Publication) => PublishedProvider) {
+export function createUiServer(config: Config, viewer: Viewer, store: PublicationStore, _providerFor: (p: Publication) => PublishedProvider, esphome?: EsphomeHandle) {
   return http.createServer(async (req, res) => {
     const json = (status: number, body: unknown) => {
       res.writeHead(status, { 'content-type': 'application/json', 'cache-control': 'no-store' });
@@ -88,7 +90,19 @@ export function createUiServer(config: Config, viewer: Viewer, store: Publicatio
           sessionsSinceStart: stats.sessions,
           publicPort: config.port,
           addonHostname: await addonHostname(config),
+          esphome: esphome ? { enabled: true, port: esphome.port, connected: esphome.connected(), clients: esphome.clients() } : { enabled: false },
         });
+      }
+      if (path.startsWith('/api/esphome')) {
+        if (!esphome) return json(404, { error: 'The Home Assistant device is switched off in the add-on options.' });
+        const host = (await addonHostname(config)) ?? process.env.PA_ADDON_HOST ?? null;
+        if (req.method === 'GET' && path === '/api/esphome/key') return json(200, { host, port: esphome.port, key: esphome.key });
+        if (req.method === 'POST' && path === '/api/esphome/adopt') {
+          if (!host) return json(400, { error: 'The add-on cannot tell what its own host name is, so it cannot point Home Assistant at itself. Add the device by hand with the details shown.' });
+          const result = await adoptIntoHomeAssistant(config, host, esphome.port, esphome.key);
+          log.info(`Adopt into Home Assistant: ${result.message}`);
+          return json(result.ok ? 200 : 502, result);
+        }
       }
       if (req.method === 'GET' && path === '/api/dashboards') return json(200, await listDashboards(config));
       if (req.method === 'POST' && path === '/api/preview') {

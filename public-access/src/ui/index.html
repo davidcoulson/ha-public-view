@@ -67,6 +67,13 @@ details summary { cursor:pointer; color: var(--accent); }
     <pre id="cf">Add a publication first.</pre>
     <div class="row"><button id="copy" type="button">Copy</button><span class="muted" id="cfnote"></span></div>
   </section>
+
+  <section aria-labelledby="es-h" id="es" hidden>
+    <h2 id="es-h">Show in Home Assistant</h2>
+    <p class="muted">This add-on can appear in Home Assistant as a device called <strong>Public Access</strong>. You get sensors (visitors, visits, refused requests, status), a switch to pause public access, limits you can change, a switch per address, and buttons to disconnect visitors or reload the view. The connection is encrypted.</p>
+    <div class="row"><button class="primary" id="es-add" type="button">Add to Home Assistant</button><button id="es-manual" type="button">Show details to add it by hand</button><span class="msg" id="es-msg" role="status"></span></div>
+    <pre id="es-details" hidden></pre>
+  </section>
 </main>
 
 <script>
@@ -179,9 +186,32 @@ details summary { cursor:pointer; color: var(--accent); }
     try { navigator.clipboard.writeText(text).then(function () { $('cfnote').textContent = 'Copied'; }, sel); } catch (e) { sel(); }
   };
 
+
+  function renderEsphome() {
+    var e = state.info.esphome; var sec = $('es');
+    if (!e || !e.enabled) { sec.hidden = true; return; }
+    sec.hidden = false;
+    $('es-msg').textContent = e.connected ? 'Home Assistant is connected to it.' : 'Not connected to Home Assistant yet.';
+    $('es-msg').className = 'msg ' + (e.connected ? 'ok' : '');
+  }
+  $('es-add').onclick = function () {
+    var m = $('es-msg'); m.className = 'msg'; m.textContent = 'Asking Home Assistant\u2026'; $('es-add').disabled = true;
+    api('api/esphome/adopt', { method: 'POST' })
+      .then(function (r) { m.className = 'msg ok'; m.textContent = r.message; })
+      .catch(function (e) { m.className = 'msg err'; m.textContent = e.message; })
+      .then(function () { $('es-add').disabled = false; return api('api/state'); })
+      .then(function (st) { state.info = st; });
+  };
+  $('es-manual').onclick = function () {
+    api('api/esphome/key').then(function (d) {
+      var pre = $('es-details'); pre.hidden = false;
+      pre.textContent = 'In Home Assistant: Settings > Devices & services > Add integration > ESPHome\nHost: ' + (d.host || '<this add-on\u2019s host name, on its Info tab>') + '\nPort: ' + d.port + '\nEncryption key: ' + d.key;
+    }).catch(function (e) { $('es-msg').className = 'msg err'; $('es-msg').textContent = e.message; });
+  };
+
   Promise.all([api('api/state'), api('api/dashboards')]).then(function (r) {
     state.info = r[0]; state.pubs = r[0].publications; state.dashboards = r[1];
-    renderPills(); fillDashboards(); renderPubs();
+    renderPills(); fillDashboards(); renderPubs(); renderEsphome();
   }).catch(function (e) { say(e.message, 'err'); });
 })();
 </script>

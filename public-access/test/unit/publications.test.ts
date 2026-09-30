@@ -8,7 +8,7 @@ import { PublicationStore, ValidationError, validatePublications } from '../../s
 const ok = { hostname: 'Solar.Example.com', dashboard: 'energy', view: 'solar' };
 
 test('valid input is cleaned: host lowercased, defaults applied', () => {
-  assert.deepEqual(validatePublications([{ ...ok, title: '  Solar  ' }]), [{ hostname: 'solar.example.com', dashboard: 'energy', view: 'solar', title: 'Solar', noindex: true }]);
+  assert.deepEqual(validatePublications([{ ...ok, title: '  Solar  ' }]), [{ hostname: 'solar.example.com', dashboard: 'energy', view: 'solar', title: 'Solar', noindex: true, enabled: true }]);
   assert.equal(validatePublications([{ ...ok, view: 12345 }])[0].view, '12345');
   assert.equal(validatePublications([{ ...ok, noindex: false }])[0].noindex, false);
 });

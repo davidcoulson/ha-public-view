@@ -1,0 +1,13 @@
+diff --git a/src/device.mjs b/src/device.mjs
+index 4a8e1d2..2c7e4b0 100644
+--- a/src/device.mjs
++++ b/src/device.mjs
+@@ -56,7 +56,7 @@ class Connection {
+       if (!this.framer) {
+         const wantsNoise = chunk[0] === INDICATOR_NOISE;
+         if (wantsNoise && !this.device.psk) { this.device._log('warn', `${this.peer}: client wants encryption but no noise key is set`); return this.close(); }
+-        if (!wantsNoise && this.device.psk && !this.device.allowPlaintext) { this.device._log('warn', `${this.peer}: client sent plaintext but a noise key is required`); return this.close(); }
++        if (!wantsNoise && this.device.psk && !this.device.allowPlaintext) { this.device._log('warn', `${this.peer}: client sent plaintext but a noise key is required`); try { this.socket.write(new NoiseFramer({ psk: this.device.psk, name: this.device.name, mac: this.device.mac.plain }).rejectFrame('Bad indicator byte')); } catch {} return this.close(); }
+         this.framer = wantsNoise
+           ? new NoiseFramer({ psk: this.device.psk, name: this.device.name, mac: this.device.mac.plain })
+           : new PlaintextFramer();

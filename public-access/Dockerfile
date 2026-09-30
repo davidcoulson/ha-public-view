@@ -4,6 +4,7 @@ ARG BUILD_FROM=node:26-alpine
 FROM ${BUILD_FROM}
 WORKDIR /app
 COPY package.json package-lock.json ./
+COPY scripts ./scripts
 RUN npm ci --omit=dev --no-audit --no-fund
 COPY src ./src
 COPY dev ./dev

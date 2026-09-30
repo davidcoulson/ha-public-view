@@ -7,7 +7,20 @@ import { log } from '../log.ts';
 import { inbound, outbound, refusalKey, type Ctx, type Msg } from '../policy/filter.ts';
 import type { PublishedProvider } from '../policy/published.ts';
 
-export const stats = { sessions: 0, active: 0, refused: {} as Record<string, number>, forwarded: {} as Record<string, number> };
+export const stats = { sessions: 0, active: 0, refused: {} as Record<string, number>, forwarded: {} as Record<string, number>, rateLimited: 0, refusedTotal: 0 };
+
+/** Every open visitor connection, so the owner can see and cut them. */
+const live = new Set<Session>();
+export function disconnectAll(reason: string): number {
+  const n = live.size;
+  for (const s of [...live]) s.close(reason);
+  return n;
+}
+export function visitorsByHost(): Map<string, number> {
+  const out = new Map<string, number>();
+  for (const s of live) out.set(s.host, (out.get(s.host) ?? 0) + 1);
+  return out;
+}
 const bump = (o: Record<string, number>, k: string) => { if (Object.keys(o).length < 200 || k in o) o[k] = (o[k] ?? 0) + 1; };
 
 export function ctxFor(pub: Publication): Ctx {
@@ -47,7 +60,8 @@ export class Session {
     this.#viewer = viewer;
     this.#haUrl = haUrl;
     stats.sessions++; stats.active++;
-    visitor.on('close', () => { stats.active--; clearInterval(heartbeat); this.#upstream?.close(); onClose(); });
+    live.add(this);
+    visitor.on('close', () => { stats.active--; live.delete(this); clearInterval(heartbeat); this.#upstream?.close(); onClose(); });
     // Drop connections that stopped answering, so they stop counting against the caps.
     visitor.on('pong', () => { this.#alive = true; });
     const heartbeat = setInterval(() => {
@@ -66,6 +80,10 @@ export class Session {
       this.#queue = this.#queue.then(() => this.#onVisitor(raw.toString())).catch((e) => log.warn(`session error: ${(e as Error).message}`));
     });
   }
+
+  get host(): string { return this.#pub.hostname; }
+
+  close(reason: string): void { this.#visitor.close(1001, reason.slice(0, 100)); }
 
   #send(o: unknown): void {
     if (this.#visitor.readyState === WebSocket.OPEN) this.#visitor.send(JSON.stringify(o));
@@ -99,6 +117,7 @@ export class Session {
     const d = inbound(msg, pub, ctxFor(this.#pub));
     if (d.kind === 'refuse') {
       bump(stats.refused, refusalKey(msg));
+      stats.refusedTotal++;
       log.debug(`refused ${refusalKey(msg)}: ${d.reason}`);
       if (typeof msg?.id === 'number') this.#send({ id: msg.id, type: 'result', success: false, error: { code: 'unauthorized', message: 'Read-only public view' } });
       return;

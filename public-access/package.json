@@ -1,17 +1,22 @@
 {
   "name": "public-access",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "description": "Publish one Home Assistant dashboard view, read-only, with no login",
-  "engines": { "node": ">=22.18" },
+  "engines": {
+    "node": ">=22.18"
+  },
   "scripts": {
     "start": "node src/main.ts",
     "test": "node --test test/unit/*.test.ts",
     "check": "tsc --noEmit",
-    "e2e": "node test/e2e/run.ts && node test/e2e/browser.ts"
+    "e2e": "node test/e2e/run.ts && node test/e2e/browser.ts",
+    "postinstall": "node scripts/patch-esphome-device.mjs",
+    "e2e:esphome": "node test/e2e/esphome.ts"
   },
   "dependencies": {
+    "esphome-device": "^0.2.0",
     "ws": "^8.18.0"
   },
   "devDependencies": {

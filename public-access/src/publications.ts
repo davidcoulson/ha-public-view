@@ -24,7 +24,7 @@ export function validatePublications(input: unknown): Publication[] {
     if (!view) throw new ValidationError(`${label}: choose a view`);
     const title = str('title');
     if (title.length > 80) throw new ValidationError(`${label}: the title is longer than 80 characters`);
-    return { hostname, dashboard, view, title: title || undefined, noindex: p.noindex === false ? false : true };
+    return { hostname, dashboard, view, title: title || undefined, noindex: p.noindex === false ? false : true, enabled: p.enabled === false ? false : true };
   });
 }
 

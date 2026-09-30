@@ -63,6 +63,9 @@ export class SessionLimiter {
 
   get active(): number { return this.#count; }
 
+  /** New caps apply to new connections; ones already open are not cut. */
+  setLimits(total: number, perVisitor: number): void { this.#total = total; this.#perVisitor = perVisitor; }
+
   /** Returns a release function, or null when a cap is reached. */
   acquire(key: string): (() => void) | null {
     const mine = this.#by.get(key) ?? 0;

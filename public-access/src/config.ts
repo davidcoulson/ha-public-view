@@ -9,6 +9,8 @@ export interface Publication {
   view: string;
   title?: string;
   noindex: boolean;
+  /** false hides this publication (404) without deleting it. Default true. */
+  enabled?: boolean;
 }
 
 export interface Limits {
@@ -36,6 +38,7 @@ export interface Config {
   /** Peers allowed to reach the setup page. The Supervisor's address inside an add-on. */
   uiAllowedPeers: string[] | 'any';
   limits: Limits;
+  esphome: { enabled: boolean; port: number };
   /** Development only: an owner account used to create the viewer user. */
   admin?: { username: string; password: string };
   /** Set by the Supervisor inside an add-on; preferred way to create the viewer user. */
@@ -45,6 +48,7 @@ export interface Config {
 interface RawOptions {
   ha_url?: string;
   log_level?: string;
+  esphome?: boolean;
   max_sessions?: number;
   max_sessions_per_visitor?: number;
   publications?: Array<Partial<Publication> & { noindex?: boolean }>;
@@ -74,6 +78,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     publications,
     uiPort: Number(env.UI_PORT ?? 8100),
     uiAllowedPeers: env.PA_UI_ALLOW_ANY === '1' ? 'any' : ['172.30.32.2', '::ffff:172.30.32.2'],
+    esphome: { enabled: env.ESPHOME_PORT === '0' ? false : (raw.esphome ?? true), port: Number(env.ESPHOME_PORT ?? 6053) },
     limits: {
       maxSessions: raw.max_sessions ?? 50,
       maxSessionsPerVisitor: raw.max_sessions_per_visitor ?? 6,

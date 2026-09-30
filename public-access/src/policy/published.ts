@@ -109,6 +109,9 @@ export class PublishedProvider {
     this.#viewer = viewer;
   }
 
+  /** Forget the cached result so the next visitor reads the view again. */
+  invalidate(): void { this.#cache = undefined; }
+
   get(): Promise<Published> {
     if (this.#cache && Date.now() - this.#cache.at < TTL_MS) return Promise.resolve(this.#cache.value);
     this.#inflight ??= this.#compute()

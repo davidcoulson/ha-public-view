@@ -1,5 +1,5 @@
 name: Public Access
-version: "0.1.0"
+version: "0.2.0"
 slug: public_access
 description: Share one dashboard view publicly, read-only, with no login
 url: https://github.com/davidcoulson/ha-public-view/tree/main/public-access
@@ -23,10 +23,12 @@ ports_description:
 options:
   ha_url: http://homeassistant:8123
   log_level: info
+  esphome: true
   publications: []
 schema:
   ha_url: url
   log_level: list(debug|info|warn|error)
+  esphome: bool
   max_sessions: int(1,500)?
   max_sessions_per_visitor: int(1,50)?
   publications:

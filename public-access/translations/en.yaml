@@ -5,6 +5,9 @@ configuration:
   log_level:
     name: Log level
     description: Use debug to see every refused request.
+  esphome:
+    name: Show as a Home Assistant device
+    description: Adds a "Public Access" device to Home Assistant with sensors for monitoring and switches for pausing and limits. Encrypted; add it from the panel.
   max_sessions:
     name: Most visitors at once
     description: Live visitor connections allowed in total. Default 50.

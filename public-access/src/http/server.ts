@@ -3,6 +3,7 @@ import { WebSocketServer } from 'ws';
 import type { Config, Publication } from '../config.ts';
 import type { Viewer } from '../core/viewer.ts';
 import type { PublicationStore } from '../publications.ts';
+import type { Settings } from '../settings.ts';
 import { RateLimiter, SessionLimiter, visitorAddress } from './guard.ts';
 import { log } from '../log.ts';
 import type { PublishedProvider } from '../policy/published.ts';
@@ -25,11 +26,13 @@ export function publicationFor(pubs: Publication[], host: string | undefined, fo
   return pubs.find((p) => p.hostname === h);
 }
 
-export function createServer(config: Config, viewer: Viewer, store: PublicationStore, providerFor: (pub: Publication) => PublishedProvider) {
+export function createServer(config: Config, viewer: Viewer, store: PublicationStore, settings: Settings, providerFor: (pub: Publication) => PublishedProvider) {
   const assets = new AssetCache(config.haUrl);
   const pages = new RateLimiter(config.limits.requestsPerMinute);
   const statics = new RateLimiter(config.limits.staticPerMinute);
-  const sessions = new SessionLimiter(config.limits.maxSessions, config.limits.maxSessionsPerVisitor);
+  const sessions = new SessionLimiter(settings.data.maxSessions, settings.data.maxSessionsPerVisitor);
+  settings.on('change', (d) => sessions.setLimits(d.maxSessions, d.maxSessionsPerVisitor));
+  const serving = () => store.list().filter((p) => p.enabled !== false);
   let indexCache: { at: number; html: string } | undefined;
 
   async function coreIndex(): Promise<string> {
@@ -49,8 +52,9 @@ export function createServer(config: Config, viewer: Viewer, store: PublicationS
     };
     try {
       if (req.method !== 'GET' && req.method !== 'HEAD') return send(405, 'Method not allowed');
-      const pub = publicationFor(store.list(), req.headers.host, req.headers['x-forwarded-host'] as string | undefined);
+      const pub = publicationFor(serving(), req.headers.host, req.headers['x-forwarded-host'] as string | undefined);
       if (!pub) return send(404, 'Not found');
+      if (settings.data.paused && path !== '/healthz') return send(503, 'Temporarily unavailable', { 'retry-after': '300', 'cache-control': 'no-store' });
       const visitor = visitorAddress(req.socket.remoteAddress, req.headers);
 
       if (path === '/healthz') return send(200, JSON.stringify({ status: 'ok', visitors: sessions.active, ...stats }), { 'content-type': 'application/json', 'cache-control': 'no-store' });
@@ -59,18 +63,18 @@ export function createServer(config: Config, viewer: Viewer, store: PublicationS
         return send(200, SELF_REMOVING_SERVICE_WORKER, { 'content-type': 'text/javascript', 'cache-control': 'no-store' });
       }
       if (isStaticPath(path)) {
-        if (!statics.allow(visitor)) return send(429, 'Too many requests', { 'retry-after': '60' });
+        if (!statics.allow(visitor)) { stats.rateLimited++; return send(429, 'Too many requests', { 'retry-after': '60' }); }
         const a = await assets.get(req.url!);
         return send(a.status, a.body, a.headers);
       }
       if (path === '/api/history/period' || path.startsWith('/api/history/period/')) {
-        if (!pages.allow(visitor)) return send(429, 'Too many requests', { 'retry-after': '60' });
+        if (!pages.allow(visitor)) { stats.rateLimited++; return send(429, 'Too many requests', { 'retry-after': '60' }); }
         const published = await providerFor(pub).get();
         const out = await historyPeriod(config.haUrl, await viewer.accessToken(), published, path, url.searchParams);
         return send(out.status, JSON.stringify(out.body), { 'content-type': 'application/json', 'cache-control': 'no-store' });
       }
       if (!/\.[a-z0-9]+$/i.test(path) && !path.startsWith('/api/') && !path.startsWith('/auth/')) {
-        if (!pages.allow(visitor)) return send(429, 'Too many requests', { 'retry-after': '60' });
+        if (!pages.allow(visitor)) { stats.rateLimited++; return send(429, 'Too many requests', { 'retry-after': '60' }); }
         const headers: Record<string, string> = { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' };
         if (pub.noindex) headers['x-robots-tag'] = 'noindex, nofollow';
         return send(200, renderIndex(await coreIndex(), pub), headers);
@@ -86,11 +90,12 @@ export function createServer(config: Config, viewer: Viewer, store: PublicationS
 
   const wss = new WebSocketServer({ noServer: true, maxPayload: 256 * 1024 });
   server.on('upgrade', (req, socket, head) => {
-    const pub = publicationFor(store.list(), req.headers.host, req.headers['x-forwarded-host'] as string | undefined);
+    const pub = publicationFor(serving(), req.headers.host, req.headers['x-forwarded-host'] as string | undefined);
     if (!pub || (req.url ?? '').split('?')[0] !== '/api/websocket') { socket.destroy(); return; }
     const visitor = visitorAddress(req.socket.remoteAddress, req.headers);
     const refuse = (status: string) => { socket.write(`HTTP/1.1 ${status}\r\nRetry-After: 30\r\nConnection: close\r\n\r\n`); socket.destroy(); };
-    if (!pages.allow(visitor)) return refuse('429 Too Many Requests');
+    if (settings.data.paused) return refuse('503 Service Unavailable');
+    if (!pages.allow(visitor)) { stats.rateLimited++; return refuse('429 Too Many Requests'); }
     const release = sessions.acquire(visitor);
     if (!release) return refuse('503 Service Unavailable');
     wss.handleUpgrade(req, socket, head, (ws) => {

@@ -19,6 +19,8 @@ visitor ─▶ Cloudflare ─▶ Cloudflared add-on ─▶ this app ──(webso
 | M5 | Setup panel through Home Assistant ingress: pick dashboard and view, preview exactly what visitors can read, edit publications live (no restart), copy the Cloudflared snippet. Only the Supervisor may reach it. | `src/ui/`, `src/publications.ts` |
 | M6 | Add-on packaging (`config.yaml`, `build.yaml`, `Dockerfile` on `node:26-alpine`, docs, translations, icon), repository file, GitHub Actions. | `config.yaml`, `DOCS.md`, `../repository.yaml`, `../.github/workflows/public-access.yml` |
 
+| ESPHome | Shows up in Home Assistant as a device (via the `esphome-device` library): sensors, pause switch, live limits, per-address switches, buttons; one-click adoption through Core's own ESPHome setup flow. | `src/esphome/`, `src/settings.ts` |
+
 Not built yet: a browser test matrix across Home Assistant releases, a one-click Cloudflare setup, a shared upstream
 connection for many visitors, a release pipeline that publishes images.
 
@@ -48,8 +50,9 @@ cd dev && docker compose up --build      # then http://localhost:8099/
 ```sh
 npm install
 npm run check        # type check
-npm test             # 43 unit tests: filter rules, view scanning, limits, visitor address, publication validation
+npm test             # 53 unit tests: filter rules, view scanning, limits, visitor address, publications, ESPHome entities
 node dev/seed.ts && npm run e2e     # 31 websocket/REST checks + 9 browser checks against a live Core (app must be running)
+npm run e2e:esphome                  # 14 checks driving the app from Home Assistant (after "Add to Home Assistant" in the panel)
 ```
 
 The e2e suite was mutation-checked: removing the `get_states` filter or the template check makes it fail.
@@ -76,5 +79,10 @@ The e2e suite was mutation-checked: removing the `get_states` filter or the temp
 - Not yet run in Docker, on a real Supervisor, or against Home Assistant 2026.9 (tested natively on 2026.2.3, Node 22).
   The GitHub Actions workflow has not run either.
 - The Supervisor-side paths (`ws://supervisor/core/websocket`, `/addons/self/info`) are written from documentation, untested.
+- `esphome-device` 0.2.0 closes the connection on a plaintext probe instead of replying "requires encryption", so
+  Home Assistant's setup flow fails. `scripts/patch-esphome-device.mjs` applies the fix after `npm install` until a
+  release carries it (`docs/esphome-device-plaintext-reject.patch` is the same change as a patch).
+- The device's entity list is fixed per start, so adding or removing an address restarts it for a few seconds.
+- mDNS is off (multicast does not leave the add-on's network), so the device is added by host name, not discovered.
 - One instance per Home Assistant: starting a second deletes and recreates the shared "Public Access viewer" user.
 - The viewer's refresh token and password live in `/data/viewer.json` (mode 600). They are included in add-on backups.
