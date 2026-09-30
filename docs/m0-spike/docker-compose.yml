@@ -1,0 +1,23 @@
+# M0 feasibility spike: a throwaway Home Assistant plus the spike server.
+# Usage:  docker compose up --build      then open http://localhost:8099/lovelace/0
+services:
+  homeassistant:
+    image: ghcr.io/home-assistant/home-assistant:stable
+    volumes:
+      - ./ha-config:/config
+    ports:
+      - "8123:8123"       # the real HA, for comparison; the spike does not need this on the host
+    environment:
+      TZ: UTC
+    restart: unless-stopped
+
+  spike:
+    build: ./spike
+    environment:
+      HA_URL: http://homeassistant:8123
+      PORT: "8099"
+    ports:
+      - "8099:8099"       # the "public" side
+    depends_on:
+      - homeassistant
+    restart: "no"

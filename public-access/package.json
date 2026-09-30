@@ -1,0 +1,23 @@
+{
+  "name": "public-access",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Publish one Home Assistant dashboard view, read-only, with no login",
+  "engines": { "node": ">=22.18" },
+  "scripts": {
+    "start": "node src/main.ts",
+    "test": "node --test test/unit/*.test.ts",
+    "check": "tsc --noEmit",
+    "e2e": "node test/e2e/run.ts && node test/e2e/browser.ts"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/ws": "^8.5.0",
+    "playwright-core": "^1.50.0",
+    "typescript": "^5.6.0"
+  }
+}

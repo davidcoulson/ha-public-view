@@ -1,0 +1,11 @@
+{
+  "name": "public-access-m0",
+  "private": true,
+  "type": "module",
+  "description": "M0 feasibility spike for a Public Access add-on",
+  "scripts": { "start": "node src/index.mjs" },
+  "dependencies": {
+    "home-assistant-js-websocket": "^9.7.0",
+    "ws": "^8.18.0"
+  }
+}

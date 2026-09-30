@@ -1,0 +1,32 @@
+# Local development stack: a throwaway Home Assistant (with demo entities) and the app.
+#   cd public-access/dev && docker compose up --build
+# Then open http://localhost:8099/ . The seed step creates the dashboard "public-test":
+# view "solar" is published, view "private" must never show up.
+services:
+  homeassistant:
+    image: ghcr.io/home-assistant/home-assistant:stable
+    volumes:
+      - ./ha-config:/config
+    ports:
+      - "8123:8123"     # the real Home Assistant, for comparison (login admin / admin-dev-password)
+    environment:
+      TZ: UTC
+
+  app:
+    build: ..
+    command: ["node", "dev/start.ts"]
+    environment:
+      HA_URL: http://homeassistant:8123
+      PA_ADMIN_USER: admin
+      PA_ADMIN_PASS: admin-dev-password
+      PA_OPTIONS_FILE: /app/dev/options.json
+      LOG_LEVEL: info
+    volumes:
+      - app-data:/data
+    ports:
+      - "8099:8099"     # the public side
+    depends_on:
+      - homeassistant
+
+volumes:
+  app-data:

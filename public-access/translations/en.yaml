@@ -1,0 +1,18 @@
+configuration:
+  ha_url:
+    name: Home Assistant address
+    description: Where this add-on reaches Home Assistant Core. Change it only if Core uses HTTPS or a different port.
+  log_level:
+    name: Log level
+    description: Use debug to see every refused request.
+  max_sessions:
+    name: Most visitors at once
+    description: Live visitor connections allowed in total. Default 50.
+  max_sessions_per_visitor:
+    name: Most connections per visitor
+    description: Live connections allowed from one address. Default 6.
+  publications:
+    name: Publications (first start only)
+    description: Seeds the list on a fresh install. After that, manage publications in the Public Access panel.
+network:
+  8099/tcp: Public page (only needed without the Cloudflared add-on)

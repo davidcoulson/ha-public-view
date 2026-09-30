@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Public Access</title>
+<style>
+:root { --bg:#f4f6f9; --surface:#fff; --fg:#14202e; --muted:#586a80; --line:#d7dfe9; --accent:#0a76a6; --good:#1a7f4b; --warn:#8f5600; --crit:#b3261e; --code:#0f1b2b; --codefg:#d8e4f2; color-scheme: light; }
+@media (prefers-color-scheme: dark) { :root { --bg:#0e151e; --surface:#151f2c; --fg:#e5ecf5; --muted:#98a9bd; --line:#27364b; --accent:#55c6ee; --good:#55d08e; --warn:#f0b64a; --crit:#ff8079; --code:#09121c; color-scheme: dark; } }
+* { box-sizing: border-box; }
+body { margin:0; padding: 24px 16px 64px; background: var(--bg); color: var(--fg); font: 15px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+main { max-width: 56rem; margin: 0 auto; display: flex; flex-direction: column; gap: 28px; }
+h1 { font-size: 1.6rem; margin: 0; } h2 { font-size: 1.1rem; margin: 0 0 10px; }
+p { margin: 0; max-width: 62ch; } .muted { color: var(--muted); font-size: .9rem; }
+section { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 18px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.pills { display:flex; flex-wrap:wrap; gap:8px; }
+.pill { font-size:.8rem; padding:2px 10px; border-radius:99px; border:1px solid var(--line); color: var(--muted); }
+table { width:100%; border-collapse: collapse; font-size:.92rem; } th,td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--line); vertical-align: top; }
+th { font-size:.72rem; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); font-weight:600; }
+.scroll { overflow-x:auto; }
+label { display:flex; flex-direction:column; gap:4px; font-size:.85rem; color: var(--muted); min-width: 0; }
+input[type=text], select { font: inherit; color: var(--fg); background: var(--bg); border:1px solid var(--line); border-radius:6px; padding:8px 10px; min-width:0; }
+input:focus-visible, select:focus-visible, button:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+.grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap:12px; }
+.check { flex-direction:row; align-items:center; gap:8px; color: var(--fg); }
+button { font: inherit; border:1px solid var(--line); background: var(--surface); color: var(--fg); border-radius:6px; padding:7px 14px; cursor:pointer; }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; } @media (prefers-color-scheme: dark) { button.primary { color:#05202c; } }
+button:disabled { opacity:.5; cursor: default; }
+.row { display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
+.msg { font-size:.9rem; } .msg.err { color: var(--crit); } .msg.ok { color: var(--good); } .msg.warn { color: var(--warn); }
+pre { margin:0; background: var(--code); color: var(--codefg); border-radius:6px; padding:12px 14px; overflow-x:auto; font: .84rem/1.5 ui-monospace, Menlo, monospace; }
+details summary { cursor:pointer; color: var(--accent); }
+.ents { columns: 2 16rem; font: .82rem/1.6 ui-monospace, Menlo, monospace; margin:8px 0 0; padding-left: 1.1rem; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Public Access</h1>
+    <p class="muted">Share one view of one dashboard, read-only, with no login. Visitors get your real dashboard; they cannot press anything.</p>
+    <div class="pills" id="pills" aria-live="polite"></div>
+  </header>
+
+  <section aria-labelledby="pubs-h">
+    <h2 id="pubs-h">Published</h2>
+    <div class="scroll"><table id="pubs"><thead><tr><th>Address</th><th>Shows</th><th>Title</th><th></th></tr></thead><tbody></tbody></table></div>
+    <p class="muted" id="pubs-empty" hidden>Nothing is published yet. Add a publication below.</p>
+  </section>
+
+  <section aria-labelledby="add-h">
+    <h2 id="add-h">Add a publication</h2>
+    <form id="form" class="grid" autocomplete="off">
+      <label>Host name<input type="text" id="hostname" placeholder="solar.example.com" required></label>
+      <label>Dashboard<select id="dashboard" required></select></label>
+      <label>View<select id="view" required></select></label>
+      <label>Title (optional)<input type="text" id="title" maxlength="80" placeholder="Shown in the browser tab"></label>
+      <label class="check"><input type="checkbox" id="noindex" checked> Ask search engines not to list it</label>
+    </form>
+    <p class="msg warn" id="note" hidden></p>
+    <div id="preview" class="muted">Choose a dashboard and view to see what visitors will be able to see.</div>
+    <div class="row"><button class="primary" id="add" type="button">Add and save</button><button id="cancel" type="button" hidden>Cancel edit</button><span class="msg" id="msg" role="status"></span></div>
+  </section>
+
+  <section aria-labelledby="cf-h">
+    <h2 id="cf-h">Expose it with the Cloudflared add-on</h2>
+    <p class="muted">Open the Cloudflared add-on's Configuration and add these lines under <code>additional_hosts</code>, then restart it. The add-on normally creates the DNS record itself; if the address does not resolve, add a CNAME for it to your tunnel in Cloudflare.</p>
+    <pre id="cf">Add a publication first.</pre>
+    <div class="row"><button id="copy" type="button">Copy</button><span class="muted" id="cfnote"></span></div>
+  </section>
+</main>
+
+<script>
+(function () {
+  var state = { pubs: [], dashboards: [], editing: -1, info: {} };
+  var $ = function (id) { return document.getElementById(id); };
+  var api = function (path, opts) {
+    return fetch(path, opts).then(function (r) { return r.json().then(function (b) { if (!r.ok) throw new Error(b.error || ('Error ' + r.status)); return b; }); });
+  };
+  function say(text, kind) { var m = $('msg'); m.textContent = text || ''; m.className = 'msg ' + (kind || ''); }
+  function el(tag, text, attrs) { var e = document.createElement(tag); if (text != null) e.textContent = text; for (var k in (attrs || {})) e.setAttribute(k, attrs[k]); return e; }
+
+  function renderPills() {
+    var p = $('pills'); p.textContent = '';
+    p.appendChild(el('span', state.info.visitors + ' visitor' + (state.info.visitors === 1 ? '' : 's') + ' now', { class: 'pill' }));
+    p.appendChild(el('span', state.info.sessionsSinceStart + ' visits since start', { class: 'pill' }));
+  }
+  function dashTitle(id) { var d = state.dashboards.find(function (x) { return x.dashboard === id; }); return d ? d.title : id; }
+  function viewTitle(id, path) { var d = state.dashboards.find(function (x) { return x.dashboard === id; }); var v = d && d.views.find(function (x) { return x.path === path; }); return v ? v.title : path; }
+
+  function renderPubs() {
+    var body = $('pubs').querySelector('tbody'); body.textContent = '';
+    $('pubs-empty').hidden = state.pubs.length > 0; $('pubs').hidden = state.pubs.length === 0;
+    state.pubs.forEach(function (p, i) {
+      var tr = el('tr');
+      tr.appendChild(el('td', p.hostname));
+      tr.appendChild(el('td', dashTitle(p.dashboard) + ' › ' + viewTitle(p.dashboard, p.view)));
+      tr.appendChild(el('td', p.title || ''));
+      var td = el('td'); var row = el('div', null, { class: 'row' });
+      var edit = el('button', 'Edit'); edit.type = 'button'; edit.onclick = function () { startEdit(i); };
+      var rm = el('button', 'Remove'); rm.type = 'button'; rm.onclick = function () { remove(i); };
+      row.appendChild(edit); row.appendChild(rm); td.appendChild(row); tr.appendChild(td); body.appendChild(tr);
+    });
+    renderCf();
+  }
+
+  function renderCf() {
+    var host = state.info.addonHostname || '<add-on host name>';
+    var port = state.info.publicPort;
+    var lines = state.pubs.length ? state.pubs.map(function (p) { return '- hostname: ' + p.hostname + '\n  service: http://' + host + ':' + port; }).join('\n') : 'Add a publication first.';
+    $('cf').textContent = lines;
+    $('cfnote').textContent = state.info.addonHostname ? '' : 'The add-on host name is on this add-on’s Info tab, under Hostname.';
+  }
+
+  function fillDashboards() {
+    var s = $('dashboard'); s.textContent = '';
+    state.dashboards.forEach(function (d) { s.appendChild(el('option', d.title, { value: d.dashboard })); });
+    var usable = state.dashboards.find(function (d) { return d.views.some(function (v) { return v.path !== null; }); });
+    if (usable) s.value = usable.dashboard;
+    fillViews();
+  }
+  function fillViews() {
+    var d = state.dashboards.find(function (x) { return x.dashboard === $('dashboard').value; });
+    var s = $('view'); s.textContent = '';
+    var note = $('note'); note.hidden = true;
+    if (d && d.note) { note.textContent = d.note; note.hidden = false; }
+    (d ? d.views : []).forEach(function (v) {
+      var o = el('option', v.path === null ? v.title + ' (needs a URL in the view settings)' : v.title, { value: v.path === null ? '' : v.path });
+      if (v.path === null) o.disabled = true; s.appendChild(o);
+    });
+    var first = Array.prototype.find.call(s.options, function (o) { return !o.disabled; });
+    if (first) s.value = first.value;
+    refreshPreview();
+  }
+
+  var previewTimer;
+  function refreshPreview() {
+    clearTimeout(previewTimer);
+    var box = $('preview');
+    if (!$('dashboard').value || !$('view').value) { box.textContent = 'Choose a dashboard and view to see what visitors will be able to see.'; return; }
+    box.textContent = 'Checking…';
+    previewTimer = setTimeout(function () {
+      api('api/preview', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ dashboard: $('dashboard').value, view: $('view').value }) })
+        .then(function (r) {
+          box.textContent = '';
+          if (!r.viewFound) { box.appendChild(el('span', 'That view was not found. Nothing would be published.', { class: 'msg err' })); return; }
+          box.appendChild(el('div', 'Visitors will be able to read ' + r.entities.length + ' entities' + (r.entities.length ? '' : ' (none found: the view may be built by a strategy)') + ', ' + r.devices + ' devices and ' + r.areas + ' areas. Nothing else in your home is sent to their browser.'));
+          if (r.energy) box.appendChild(el('div', 'This view has energy cards, so the energy settings are readable too.', { class: 'muted' }));
+          var d = el('details'); d.appendChild(el('summary', 'Show the entities'));
+          var ul = el('ul', null, { class: 'ents' }); r.entities.forEach(function (e) { ul.appendChild(el('li', e)); }); d.appendChild(ul); box.appendChild(d);
+        }).catch(function (e) { box.textContent = ''; box.appendChild(el('span', e.message, { class: 'msg err' })); });
+    }, 250);
+  }
+
+  function save(list, done) {
+    say('Saving…');
+    api('api/publications', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(list) })
+      .then(function (saved) { state.pubs = saved; renderPubs(); say('Saved. Changes apply to the next visitor.', 'ok'); if (done) done(); })
+      .catch(function (e) { say(e.message, 'err'); });
+  }
+  function current() { return { hostname: $('hostname').value, dashboard: $('dashboard').value, view: $('view').value, title: $('title').value, noindex: $('noindex').checked }; }
+  function resetForm() { state.editing = -1; $('hostname').value = ''; $('title').value = ''; $('noindex').checked = true; $('add').textContent = 'Add and save'; $('cancel').hidden = true; }
+  function startEdit(i) {
+    var p = state.pubs[i]; state.editing = i;
+    $('hostname').value = p.hostname; $('title').value = p.title || ''; $('noindex').checked = p.noindex;
+    $('dashboard').value = p.dashboard; fillViews(); $('view').value = p.view; refreshPreview();
+    $('add').textContent = 'Save changes'; $('cancel').hidden = false; $('hostname').focus();
+  }
+  function remove(i) { var list = state.pubs.slice(); list.splice(i, 1); save(list); }
+  $('dashboard').onchange = fillViews; $('view').onchange = refreshPreview;
+  $('cancel').onclick = function () { resetForm(); say(''); };
+  $('add').onclick = function () {
+    var list = state.pubs.slice(); var item = current();
+    if (state.editing >= 0) list[state.editing] = item; else list.push(item);
+    save(list, resetForm);
+  };
+  $('copy').onclick = function () {
+    var text = $('cf').textContent;
+    function sel() { var r = document.createRange(); r.selectNodeContents($('cf')); var s = getSelection(); s.removeAllRanges(); s.addRange(r); }
+    try { navigator.clipboard.writeText(text).then(function () { $('cfnote').textContent = 'Copied'; }, sel); } catch (e) { sel(); }
+  };
+
+  Promise.all([api('api/state'), api('api/dashboards')]).then(function (r) {
+    state.info = r[0]; state.pubs = r[0].publications; state.dashboards = r[1];
+    renderPills(); fillDashboards(); renderPubs();
+  }).catch(function (e) { say(e.message, 'err'); });
+})();
+</script>
+</body>
+</html>

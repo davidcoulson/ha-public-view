@@ -1,0 +1,5 @@
+{
+  "publications": [
+    { "hostname": "localhost", "dashboard": "public-test", "view": "solar", "title": "Solar demo", "noindex": true }
+  ]
+}

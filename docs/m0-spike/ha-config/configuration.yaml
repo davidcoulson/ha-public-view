@@ -1,0 +1,4 @@
+# Minimal config for the spike. `demo:` adds fake lights, sensors and climate
+# entities so there is something to read and something to (fail to) write.
+default_config:
+demo:
