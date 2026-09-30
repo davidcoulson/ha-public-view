@@ -11,7 +11,7 @@ visitor ─▶ Cloudflare ─▶ Cloudflared add-on ─▶ Public Access add-on 
 
 ## Status: early, not yet proven on a real Supervisor
 
-Built and tested against a native Home Assistant 2026.2.3 with Node 22: 43 unit tests, 31 websocket/REST checks and
+Built and tested against a native Home Assistant 2026.2.3 with Node 22: 53 unit tests, 31 websocket/REST checks, 14 checks driving it from Home Assistant, and
 9 browser checks all pass. **Not yet run:** the Docker image, a real Supervisor install, Home Assistant 2026.9,
 or the GitHub Actions workflow. Expect rough edges, and please
 [open an issue](../../issues) with what you find. Treat it as something to try on a test setup first, and read
