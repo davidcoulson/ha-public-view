@@ -177,7 +177,7 @@ details summary { cursor:pointer; color: var(--accent); }
   $('cancel').onclick = function () { resetForm(); say(''); };
   $('add').onclick = function () {
     var list = state.pubs.slice(); var item = current();
-    if (state.editing >= 0) list[state.editing] = item; else list.push(item);
+    if (state.editing >= 0) { item.enabled = state.pubs[state.editing].enabled; list[state.editing] = item; } else list.push(item);
     save(list, resetForm);
   };
   $('copy').onclick = function () {

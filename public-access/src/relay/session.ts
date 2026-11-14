@@ -48,6 +48,7 @@ export class Session {
   #types = new Map<number, string>();
   /** Subscriptions answered locally that Core knows nothing about. */
   #silent = new Set<number>();
+  #lastId = 0;
   #queue: Promise<void> = Promise.resolve();
   #flood: Flood;
   #alive = true;
@@ -93,11 +94,17 @@ export class Session {
     let data: unknown;
     try { data = JSON.parse(text); } catch { return; }
     const items = Array.isArray(data) ? data : [data];
-    for (const item of items) await this.#handle(item);
+    for (const [i, item] of items.entries()) {
+      // The frame was counted on arrival; every further message packed into it counts too.
+      if (i && !this.#flood.hit()) return this.#visitor.close(1008, 'too many messages');
+      await this.#handle(item);
+    }
   }
 
   async #handle(msg: any): Promise<void> {
     if (msg?.type === 'auth') {
+      // Once only: a second auth would open another upstream connection that nothing closes.
+      if (this.#upstreamReady) return;
       // Accepts any token: the endpoint is public by design and identifies nobody.
       this.#send({ type: 'auth_ok', ha_version: '0.0-public' });
       this.#upstreamReady = this.#connectUpstream().catch((e) => {
@@ -108,6 +115,12 @@ export class Session {
     }
     await this.#upstreamReady;
     if (this.#visitor.readyState !== WebSocket.OPEN || !this.#upstream) return;
+
+    // Ids must increase, as Core itself requires: a reused id would relabel a pending reply and skip its filter.
+    if (typeof msg?.id === 'number') {
+      if (msg.id <= this.#lastId) return this.#send({ id: msg.id, type: 'result', success: false, error: { code: 'id_reuse', message: 'Identifier values have to increase.' } });
+      this.#lastId = msg.id;
+    }
 
     // Silent subscriptions never reached Core, so cancelling one is answered here.
     if (msg?.type === 'unsubscribe_events' && this.#silent.delete(msg.subscription)) {
@@ -134,6 +147,7 @@ export class Session {
 
   async #connectUpstream(): Promise<void> {
     const token = await this.#viewer.accessToken();
+    if (this.#visitor.readyState !== WebSocket.OPEN) return; // left while we waited; nothing would close the connection
     const ws = new WebSocket(wsUrl(this.#haUrl));
     this.#upstream = ws;
     await new Promise<void>((resolve, reject) => {
@@ -153,16 +167,20 @@ export class Session {
   #fromCore(text: string): void {
     // Runs on the same queue so it sees the same allowlist snapshot ordering as requests.
     this.#queue = this.#queue.then(async () => {
-      const m: Msg = JSON.parse(text);
-      const type = this.#types.get(m.id) ?? '';
-      let out: Msg | null;
-      try {
-        out = outbound(type, m, await this.#published.get(), ctxFor(this.#pub));
-      } catch (e) {
-        log.warn(`dropped a reply to ${type}: ${(e as Error).message}`);
-        out = null;
+      const data = JSON.parse(text);
+      // Core batches messages into one array once the frontend asks for coalescing; filter each on its own.
+      for (const m of (Array.isArray(data) ? data : [data]) as Msg[]) {
+        const type = this.#types.get(m?.id);
+        if (type === undefined) continue; // not an answer to anything this visitor was allowed to ask
+        let out: Msg | null;
+        try {
+          out = outbound(type, m, await this.#published.get(), ctxFor(this.#pub));
+        } catch (e) {
+          log.warn(`dropped a reply to ${type}: ${(e as Error).message}`);
+          out = null;
+        }
+        if (out) this.#send(out);
       }
-      if (out) this.#send(out);
     }).catch(() => undefined);
   }
 }

@@ -45,6 +45,8 @@ const providerFor = (p: Publication): PublishedProvider => {
 store.onChange(() => {
   const live = new Set(store.list().map(key));
   for (const k of providers.keys()) if (!live.has(k)) providers.delete(k);
+  // Open sessions hold the publication they started with; cut them so a disabled or changed one stops serving.
+  disconnectAll('publications changed');
 });
 
 const health = startHealthProbe(config, viewer);

@@ -71,7 +71,11 @@ test('render_template only for text that is verbatim in the view', () => {
   const tpl = "It is {{ states('sensor.temp') }} out";
   const m = forwarded({ id: 9, type: 'render_template', template: tpl, variables: { config: { a: 1 }, user: 'x', states: 'nope' }, entity_ids: ['all'] });
   assert.equal(m.template, tpl);
-  assert.deepEqual(Object.keys(m.variables).sort(), ['config', 'user']);
+  // A made-up card config could point the template at a private entity, so it is dropped; the name is fixed.
+  assert.deepEqual(m.variables, { user: 'Visitor' });
+  const card = { type: 'markdown', content: tpl };
+  assert.deepEqual(forwarded({ id: 9, type: 'render_template', template: tpl, variables: { config: card } }).variables, { config: card });
+  assert.deepEqual(forwarded({ id: 9, type: 'render_template', template: tpl, variables: { config: { ...card, entity: 'lock.secret' } } }).variables, {});
   assert.equal(m.entity_ids, undefined);
   assert.equal(ask({ id: 9, type: 'render_template', template: '{{ states | list }}' }).kind, 'refuse');
   assert.equal(ask({ id: 9, type: 'render_template', template: tpl + ' ' }).kind, 'refuse');
@@ -161,4 +165,11 @@ test('default_panel preferences are pinned to the public panel', () => {
 test('errors from Core pass through untouched', () => {
   const err = { id: 1, type: 'result', success: false, error: { code: 'x', message: 'y' } };
   assert.deepEqual(outbound('get_states', { ...err }, pub, ctx), err);
+});
+
+test('subscribe_events: signal events lose their data, and other dashboards stay silent', () => {
+  const ev = (event_type: string, data: Msg) => outbound('subscribe_events', { id: 3, type: 'event', event: { event_type, data } }, pub, ctx);
+  assert.deepEqual(ev('core_config_updated', { latitude: 1, longitude: 2 })?.event.data, {});
+  assert.equal(ev('lovelace_updated', { url_path: 'private' }), null);
+  assert.deepEqual(ev('lovelace_updated', { url_path: 'public-test' })?.event.data, { url_path: null });
 });

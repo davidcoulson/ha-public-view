@@ -41,7 +41,16 @@ export class Settings extends EventEmitter {
 
   get data(): Readonly<SettingsData> { return this.#data; }
 
-  async update(patch: Partial<SettingsData>): Promise<void> {
+  #saving: Promise<unknown> = Promise.resolve();
+
+  /** One save at a time: overlapping saves share the temp file. */
+  update(patch: Partial<SettingsData>): Promise<void> {
+    const run = this.#saving.then(() => this.#save(patch));
+    this.#saving = run.catch(() => undefined);
+    return run;
+  }
+
+  async #save(patch: Partial<SettingsData>): Promise<void> {
     const clean = sanitize(patch);
     if (!Object.keys(clean).length) return;
     this.#overrides = { ...this.#overrides, ...clean };
