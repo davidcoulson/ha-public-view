@@ -10,7 +10,7 @@ import { PublicationStore } from './publications.ts';
 import { disconnectAll, stats, visitorsByHost } from './relay/session.ts';
 import { Settings, type LogLevelName } from './settings.ts';
 
-const VERSION = '0.2.0';
+const VERSION = '0.2.1';
 const config = loadConfig();
 setLogLevel(config.logLevel);
 
