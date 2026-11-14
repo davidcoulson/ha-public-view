@@ -19,11 +19,12 @@ const SECURITY_HEADERS = {
   'content-security-policy': "frame-ancestors 'none'; base-uri 'none'; object-src 'none'; form-action 'none'",
 };
 
-/** Publication for a request: by Host header, or the only one when there is just one. */
+/** Publication for a request: by Host header, or the only one when there is just one. A disabled one answers as if absent. */
 export function publicationFor(pubs: Publication[], host: string | undefined, forwardedHost?: string): Publication | undefined {
-  if (pubs.length === 1) return pubs[0];
   const h = (forwardedHost ?? host ?? '').split(',')[0].trim().toLowerCase().replace(/:\d+$/, '');
-  return pubs.find((p) => p.hostname === h);
+  // Chosen from the whole list, then checked: a disabled host must not fall through to the one that is left.
+  const pub = pubs.length === 1 ? pubs[0] : pubs.find((p) => p.hostname === h);
+  return pub?.enabled === false ? undefined : pub;
 }
 
 export function createServer(config: Config, viewer: Viewer, store: PublicationStore, settings: Settings, providerFor: (pub: Publication) => PublishedProvider) {
@@ -32,7 +33,6 @@ export function createServer(config: Config, viewer: Viewer, store: PublicationS
   const statics = new RateLimiter(config.limits.staticPerMinute);
   const sessions = new SessionLimiter(settings.data.maxSessions, settings.data.maxSessionsPerVisitor);
   settings.on('change', (d) => sessions.setLimits(d.maxSessions, d.maxSessionsPerVisitor));
-  const serving = () => store.list().filter((p) => p.enabled !== false);
   let indexCache: { at: number; html: string } | undefined;
 
   async function coreIndex(): Promise<string> {
@@ -44,7 +44,9 @@ export function createServer(config: Config, viewer: Viewer, store: PublicationS
   }
 
   const server = http.createServer(async (req, res) => {
-    const url = new URL(req.url ?? '/', 'http://x');
+    // A target such as "//[" passes Node's parser but is not a URL; throwing here would end the process.
+    const url = URL.parse(req.url ?? '/', 'http://x');
+    if (!url) { res.writeHead(400, SECURITY_HEADERS); res.end('Bad request'); return; }
     const path = url.pathname;
     const send = (status: number, body: string | Buffer, headers: Record<string, string> = {}) => {
       res.writeHead(status, { ...SECURITY_HEADERS, ...headers });
@@ -52,7 +54,7 @@ export function createServer(config: Config, viewer: Viewer, store: PublicationS
     };
     try {
       if (req.method !== 'GET' && req.method !== 'HEAD') return send(405, 'Method not allowed');
-      const pub = publicationFor(serving(), req.headers.host, req.headers['x-forwarded-host'] as string | undefined);
+      const pub = publicationFor(store.list(), req.headers.host, req.headers['x-forwarded-host'] as string | undefined);
       if (!pub) return send(404, 'Not found');
       if (settings.data.paused && path !== '/healthz') return send(503, 'Temporarily unavailable', { 'retry-after': '300', 'cache-control': 'no-store' });
       const visitor = visitorAddress(req.socket.remoteAddress, req.headers);
@@ -90,7 +92,7 @@ export function createServer(config: Config, viewer: Viewer, store: PublicationS
 
   const wss = new WebSocketServer({ noServer: true, maxPayload: 256 * 1024 });
   server.on('upgrade', (req, socket, head) => {
-    const pub = publicationFor(serving(), req.headers.host, req.headers['x-forwarded-host'] as string | undefined);
+    const pub = publicationFor(store.list(), req.headers.host, req.headers['x-forwarded-host'] as string | undefined);
     if (!pub || (req.url ?? '').split('?')[0] !== '/api/websocket') { socket.destroy(); return; }
     const visitor = visitorAddress(req.socket.remoteAddress, req.headers);
     const refuse = (status: string) => { socket.write(`HTTP/1.1 ${status}\r\nRetry-After: 30\r\nConnection: close\r\n\r\n`); socket.destroy(); };
@@ -98,6 +100,7 @@ export function createServer(config: Config, viewer: Viewer, store: PublicationS
     if (!pages.allow(visitor)) { stats.rateLimited++; return refuse('429 Too Many Requests'); }
     const release = sessions.acquire(visitor);
     if (!release) return refuse('503 Service Unavailable');
+    socket.once('close', release); // a handshake ws rejects never reaches Session, which would keep the slot for good
     wss.handleUpgrade(req, socket, head, (ws) => {
       new Session(ws, pub, providerFor(pub), viewer, config.haUrl, config.limits.messagesPer10s, release);
     });

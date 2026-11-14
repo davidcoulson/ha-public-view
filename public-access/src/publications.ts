@@ -49,7 +49,16 @@ export class PublicationStore {
   list(): Publication[] { return this.#list; }
   onChange(fn: () => void): void { this.#listeners.push(fn); }
 
-  async set(input: unknown): Promise<Publication[]> {
+  #saving: Promise<unknown> = Promise.resolve();
+
+  /** One save at a time: overlapping saves share the temp file and could leave disk and memory disagreeing. */
+  set(input: unknown): Promise<Publication[]> {
+    const run = this.#saving.then(() => this.#save(input));
+    this.#saving = run.catch(() => undefined);
+    return run;
+  }
+
+  async #save(input: unknown): Promise<Publication[]> {
     const next = validatePublications(input);
     await mkdir(join(this.#file, '..'), { recursive: true });
     const tmp = `${this.#file}.tmp`;

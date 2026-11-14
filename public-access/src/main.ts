@@ -10,7 +10,7 @@ import { PublicationStore } from './publications.ts';
 import { disconnectAll, stats, visitorsByHost } from './relay/session.ts';
 import { Settings, type LogLevelName } from './settings.ts';
 
-const VERSION = '0.2.0';
+const VERSION = '0.2.1';
 const config = loadConfig();
 setLogLevel(config.logLevel);
 
@@ -45,6 +45,8 @@ const providerFor = (p: Publication): PublishedProvider => {
 store.onChange(() => {
   const live = new Set(store.list().map(key));
   for (const k of providers.keys()) if (!live.has(k)) providers.delete(k);
+  // Open sessions hold the publication they started with; cut them so a disabled or changed one stops serving.
+  disconnectAll('publications changed');
 });
 
 const health = startHealthProbe(config, viewer);

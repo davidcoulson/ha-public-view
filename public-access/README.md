@@ -50,7 +50,7 @@ cd dev && docker compose up --build      # then http://localhost:8099/
 ```sh
 npm install
 npm run check        # type check
-npm test             # 53 unit tests: filter rules, view scanning, limits, visitor address, publications, ESPHome entities
+npm test             # 56 unit tests: filter rules, view scanning, limits, visitor address, publications, ESPHome entities
 node dev/seed.ts && npm run e2e     # 31 websocket/REST checks + 9 browser checks against a live Core (app must be running)
 npm run e2e:esphome                  # 14 checks driving the app from Home Assistant (after "Add to Home Assistant" in the panel)
 ```

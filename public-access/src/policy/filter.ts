@@ -160,8 +160,12 @@ const RULES: Record<string, Rule> = {
     if (!isStr(m.template) || !pub.templates.has(m.template)) return refuse('template not in the published view');
     const out: Msg = { id: m.id, type: m.type, template: m.template, ...pick(m, ['timeout', 'report_errors']) };
     if (m.variables && typeof m.variables === 'object') {
-      const vars = pick(m.variables as Msg, ['config', 'user']);
-      if (JSON.stringify(vars).length <= 8000) out.variables = vars;
+      // A template may read `config.entity`, so only a card config that is in the view, unchanged, is passed on.
+      const vars: Msg = {};
+      const config = (m.variables as Msg).config;
+      if (config && typeof config === 'object' && !Array.isArray(config) && inView(pub.view, JSON.stringify(config))) vars.config = config;
+      if ((m.variables as Msg).user !== undefined) vars.user = 'Visitor';
+      out.variables = vars;
     }
     return { kind: 'forward', msg: out };
   },
@@ -169,6 +173,13 @@ const RULES: Record<string, Rule> = {
   'energy/get_prefs': (m, pub) => (pub.energy ? plain(m) : reply({ energy_sources: [], device_consumption: [] })),
   'energy/info': (m, pub) => (pub.energy ? plain(m) : reply({ cost_sensors: {}, solar_forecast_domains: [] })),
 };
+
+/** True when some object inside `value` serialises to exactly `target`. */
+function inView(value: unknown, target: string): boolean {
+  if (!value || typeof value !== 'object') return false;
+  if (!Array.isArray(value) && JSON.stringify(value) === target) return true;
+  return Object.values(value).some((v) => inView(v, target));
+}
 
 function history(m: Msg, pub: Published): Inbound {
   const w = window(m, MAX_HISTORY_SPAN);
@@ -264,6 +275,11 @@ export function outbound(type: string, m: Msg, pub: Published, ctx: Ctx): Msg | 
       if (m.type !== 'event') return m;
       const data = m.event?.data;
       if (m.event?.event_type === 'state_changed') return data && pub.entities.has(data.entity_id) ? m : null;
+      // The rest only tell the frontend to ask again; their data holds the home location or other dashboards' paths.
+      if (m.event?.event_type === 'lovelace_updated') {
+        if ((data?.url_path ?? null) !== ctx.dashboardUrlPath) return null;
+        m.event.data = { url_path: null };
+      } else if (m.event) m.event.data = {};
       return m;
     }
 

@@ -1,5 +1,5 @@
 name: Public Access
-version: "0.2.0"
+version: "0.2.1"
 slug: public_access
 description: Share one dashboard view publicly, read-only, with no login
 url: https://github.com/davidcoulson/ha-public-view/tree/main/public-access

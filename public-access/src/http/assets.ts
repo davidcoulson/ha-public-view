@@ -33,7 +33,8 @@ export class AssetCache {
   }
 
   #store(key: string, asset: Asset): void {
-    this.#bytes += asset.body.length;
+    this.#bytes += asset.body.length - (this.#map.get(key)?.asset.body.length ?? 0);
+    this.#map.delete(key); // re-insert at the end, as the newest
     this.#map.set(key, { at: Date.now(), asset });
     // Oldest first: Map keeps insertion order.
     for (const [k, v] of this.#map) {

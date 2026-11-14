@@ -70,4 +70,7 @@ test('publicationFor: by host, or the only publication', () => {
   assert.equal(publicationFor([a, b], 'other.com'), undefined);
   assert.equal(publicationFor([a, b], 'x', 'a.example.com, proxy'), a);
   assert.equal(publicationFor([a], 'anything'), a);
+  const off = { ...a, enabled: false };
+  assert.equal(publicationFor([off, b], 'a.example.com'), undefined);
+  assert.equal(publicationFor([off], 'anything'), undefined);
 });
